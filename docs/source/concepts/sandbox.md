@@ -66,7 +66,110 @@ sandbox:
     claude: /opt/agent-runtime/bin/claude
 ```
 
-Docker, Modal, and OpenYuanRong support `image_mounts`. `image_map` rewrites only the task `image`, so mounted image references must already be complete and pullable. `executable_paths` exposes selected mounted commands after startup; Local and veFaaS reject it.
+Docker, Modal, and OpenYuanRong support `image_mounts`. `image_map` rewrites only the task `image`, so mounted image references must already be complete and pullable. `executable_paths` exposes selected mounted commands after startup; Local, veFaaS, and E2B reject it.
+
+### KASandbox / E2B
+
+The optional `e2b` provider creates one new sandbox per instance from an existing
+KASandbox template ID or alias. For development, install the SDK from a sibling
+KASandbox checkout, running this command from the Uni-Agent repository:
+
+```console
+python -m pip install -e ../KASandbox/py-sdk
+```
+
+The initial compatibility reference is KASandbox revision `c497053` (SDK package
+version `2.19.0`). An arbitrary public `e2b` release is not guaranteed to have the
+same self-hosted routing behavior. E2B is imported only when used and is not a
+mandatory Uni-Agent dependency.
+
+```yaml
+sandbox:
+  provider: e2b
+  runtime_timeout: 7200
+  sandbox_kwargs:
+    template: "<existing-template-id-or-alias>"
+    api_url: "http://<kasandbox-api-host>:3000"
+    domain: "<configured-sandbox-domain>"
+    # sandbox_url: "http://<sandbox-command-and-file-endpoint>"
+    request_timeout: 60
+    health_timeout: 10
+    cleanup_timeout: 30
+```
+
+Supply credentials through the SDK's environment configuration, such as
+`E2B_API_KEY`. Explicit per-instance `api_key`, `api_url`, `domain`, and
+`sandbox_url` options are supported without changing process-wide environment
+variables. Omitted connection options use SDK defaults/environment settings.
+The optional `user` applies to both commands and files; omitting it uses the
+template/SDK default user. Unknown options are rejected. `E2B_DEBUG=true` is
+rejected because that SDK mode skips real allocation and deletion.
+
+`template` must be nonempty. The provider neither builds templates nor interprets
+`image` as a template ID. The explicit template is authoritative even when a
+dataset row supplies an `image` (including one rewritten by `image_map`). Use only
+tasks matching that template; heterogeneous datasets require a future
+image-to-template mapping. Prepare required executables in the template:
+nonempty `image_mounts` and `executable_paths` are rejected.
+
+There are two required network paths:
+
+1. Uni-Agent workers must reach the KASandbox API and sandbox command/file
+   endpoints. Configure `sandbox_url` if required by the deployment's routing.
+2. The sandbox must reach the session-specific Uni-Agent gateway address and
+   port injected by the task runner. The provider supplies no reverse tunnel;
+   `proxy_port` is rejected and `expose_port()` is unsupported.
+
+Install the same compatible SDK and supply credentials and connection settings
+in every relevant Ray worker environment. The provider remains agent-agnostic;
+the existing Claude Code agent launches Claude and supplies its gateway
+environment.
+
+Lifecycle and operation semantics:
+
+- `runtime_timeout` is a finite positive sandbox lifetime, rounded **up** to
+  integer seconds. There is no automatic renewal, attach, pooling, or pause.
+  Repeated `start()` does not allocate again; after successful `stop()`, a new
+  `start()` creates a fresh sandbox.
+- `request_timeout` bounds API requests and command launch (default 60 seconds).
+  `health_timeout` bounds readiness/health probes (10 seconds), and
+  `cleanup_timeout` bounds deletion (30 seconds). All must be finite and positive.
+  The base startup concurrency, timeout, retries, and failed-start cleanup apply.
+- The command `timeout` is a separate deadline covering launch and execution.
+  `None` removes the command deadline, including the SDK's default 60-second
+  connection limit; sandbox lifetime still applies. Nonzero exits preserve the
+  actual exit code, stdout, and stderr. Arguments are POSIX-quoted; `workdir` and
+  the command environment are forwarded to the SDK.
+- A command timeout or cancellation attempts bounded deletion of the **entire
+  sandbox**, since the SDK's process kill does not guarantee child termination.
+  Subsequent evaluation cannot use a destroyed sandbox. Timeouts follow the base
+  policy (`exit_code=-1`); cancellation propagates after cleanup. Failed deletion
+  retains ownership for a later `stop()` and reports the failure in the timeout
+  result or cancellation log. The instance refuses further operations until
+  deletion succeeds. An already-deleted sandbox counts as successful cleanup.
+- Startup cancellation shields allocation for the remainder of its bounded
+  request, retains any returned handle, and attempts deletion before propagating
+  cancellation. A lost create response or SDK failure after allocation can still
+  leave an unknown sandbox ID. Its finite lifetime is the final cleanup bound;
+  immediate deletion cannot be guaranteed in this window. Keep
+  `SANDBOX_STOP_TIMEOUT` large enough for the configured deletion bound.
+- Absolute file paths use native binary reads and writes (strings are encoded as
+  UTF-8); reads return `bytes`, missing reads raise, and writes create parents and
+  overwrite existing files. Relative paths use the base command implementation
+  so they share command working-directory semantics. Upload/download reuse these
+  methods; directory transfer also requires `bash`, `tar`, and `gzip` in the
+  template (relative file operations require `base64`). Native persistent shells
+  are unsupported; `exec_shell()` uses the standard `bash -c` wrapper.
+- The reference SDK shares HTTP transports per event loop and exposes no public
+  sandbox transport-close operation. The provider does not close private clients
+  that other instances may still use. Per-instance proxy configuration is not
+  exposed because that shared transport would not isolate different proxies.
+
+Live deployment validation remains necessary: lifecycle and double-stop,
+nonzero commands, literal arguments, environment/cwd forwarding, text/binary and
+directory transfers, command timeout/cancellation, failed/cancelled startup,
+deleted-sandbox errors, and isolation between two instances. A live Claude Code
+episode and RL training are separate integration milestones.
 
 ## Lifecycle
 
