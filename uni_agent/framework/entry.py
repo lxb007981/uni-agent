@@ -52,6 +52,8 @@ def build_gateway_manager(*, config, llm_client) -> GatewayManager:
     model_config: HFModelConfig = omega_conf_to_dataclass(model_cfg)
     gateway_actor_config = GatewayActorConfig(
         tokenizer=model_config.tokenizer,
+        listen_port=af_cfg.get("gateway_listen_port", 0),
+        advertised_base_url=af_cfg.get("gateway_advertised_base_url"),
         processor=model_config.processor,
         tool_parser_name=rollout_config.multi_turn.format,
         rollout_backend=rollout_config.name,

@@ -10,8 +10,12 @@ No proxy process.
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import logging
+import os
 import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import Field
@@ -65,6 +69,15 @@ class ClaudeCodeConfig(AgentConfig):
     """Black-box launch params for Claude Code (policy endpoint lives on :attr:`AgentConfig.model`)."""
 
     name: str = "claude_code"
+    local_binary_path: str | None = Field(
+        default_factory=lambda: os.environ.get("CLAUDE_CODE_LOCAL_BINARY") or None,
+        description="Native binary on the worker filesystem; uploaded instead of installing online.",
+    )
+    local_binary_sha256: str | None = Field(
+        default_factory=lambda: os.environ.get("CLAUDE_CODE_LOCAL_BINARY_SHA256") or None,
+        pattern=r"^[0-9a-fA-F]{64}$",
+        description="Optional expected SHA-256 of the supplied native binary.",
+    )
     max_turns: int | None = Field(default=80, description="--max-turns budget; None to omit.")
     enable_web_tools: bool = Field(
         default=False,
@@ -155,6 +168,11 @@ class ClaudeCodeAgent(Agent):
 
     # ----- helpers -----
     async def _ensure_claude(self, sandbox: Sandbox) -> None:
+        cfg: ClaudeCodeConfig = self.config  # type: ignore[assignment]
+        if cfg.local_binary_path:
+            await self._upload_claude(sandbox, cfg)
+            return
+
         if (await sandbox.exec_shell("command -v claude >/dev/null 2>&1")).exit_code == 0:
             logger.info("claude_code: found existing claude on PATH; skipping installation")
             return
@@ -172,13 +190,55 @@ class ClaudeCodeAgent(Agent):
             raise RuntimeError("claude_code: installation finished but claude is not available on PATH")
         logger.info("claude_code: installation completed")
 
+    async def _upload_claude(self, sandbox: Sandbox, cfg: ClaudeCodeConfig) -> None:
+        assert cfg.local_binary_path is not None
+        source = Path(cfg.local_binary_path).expanduser()
+        if not source.is_absolute() or not source.is_file():
+            raise ValueError(
+                f"claude_code: local_binary_path must be an existing absolute file on this worker: {source}"
+            )
+
+        def checksum() -> str:
+            digest = hashlib.sha256()
+            with source.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            return digest.hexdigest()
+
+        digest = await asyncio.to_thread(checksum)
+        if cfg.local_binary_sha256 and digest != cfg.local_binary_sha256.lower():
+            raise ValueError(f"claude_code: local binary SHA-256 mismatch: {source}")
+        temporary = f"/usr/local/bin/.claude-upload-{uuid.uuid4().hex}"
+        logger.info("claude_code: uploading %s (sha256=%s)", source, digest)
+        try:
+            result = await sandbox.exec_shell("mkdir -p /usr/local/bin", timeout=30)
+            if result.exit_code != 0:
+                raise RuntimeError(f"claude_code: cannot prepare binary directory: {result.stderr}")
+            await sandbox.upload_file(source, temporary)
+            result = await sandbox.exec_shell(
+                f"set -e; printf '%s  %s\n' '{digest}' '{temporary}' | sha256sum -c -; "
+                f"chmod 0755 '{temporary}'; '{temporary}' --version; "
+                f"mv -f '{temporary}' /usr/local/bin/claude",
+                env={"DISABLE_AUTOUPDATER": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"},
+                timeout=60,
+            )
+            if result.exit_code != 0:
+                detail = (result.stderr or result.stdout or "unknown error").strip()[-2000:]
+                raise RuntimeError(f"claude_code: uploaded binary verification failed: {detail}")
+            logger.info("claude_code: uploaded binary ready: %s", result.stdout.strip())
+        finally:
+            try:
+                await sandbox.exec_shell(f"rm -f '{temporary}'", timeout=30)
+            except Exception:
+                logger.warning("claude_code: could not remove temporary upload %s", temporary, exc_info=True)
+
     def _claude_argv(self, user_prompt: str, *, system_prompt: str | None = None) -> list[str]:
         cfg: ClaudeCodeConfig = self.config  # type: ignore[assignment]
         model = cfg.model.model_name
         if not model:
             raise ValueError("claude_code: set config.model.model_name (the model claude sends)")
         argv = [
-            "claude",
+            "/usr/local/bin/claude" if cfg.local_binary_path else "claude",
             "-p",
             user_prompt,
             "--model",
@@ -233,5 +293,7 @@ class ClaudeCodeAgent(Agent):
         }
         if cfg.enable_subagents:
             env["CLAUDE_CODE_SUBAGENT_MODEL"] = model
+        if cfg.local_binary_path:
+            env["DISABLE_AUTOUPDATER"] = "1"
         env.update(cfg.extra_env)
         return env

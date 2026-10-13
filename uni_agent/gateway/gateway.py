@@ -29,6 +29,7 @@ from uni_agent.gateway.adapters.openai import (
 )
 from uni_agent.gateway.adapters.types import AnthropicRequest, MalformedRequestError, OpenAIChatCompletionRequest
 from uni_agent.gateway.config import GatewayActorConfig
+from uni_agent.gateway.http_server import run_fixed_port_server
 from uni_agent.gateway.session import (
     GatewaySession,
     MessageCodec,
@@ -63,6 +64,8 @@ class _GatewayActor:
     def __init__(self, config: GatewayActorConfig, backend):
         """Create an actor with model codec configuration and backend client."""
         self._server_address = ray.util.get_node_ip_address().strip("[]")
+        self._listen_port = config.listen_port
+        self._advertised_base_url = config.advertised_base_url
         self._backend = backend
         self._codec = MessageCodec(
             tokenizer=config.tokenizer,
@@ -232,9 +235,19 @@ class _GatewayActor:
         """Start the FastAPI server backing this gateway actor."""
         if self._server_task is not None:
             return
-        self._server_port, self._server_task = await run_uvicorn(self._app, None, self._server_address)
+        if self._listen_port:
+            self._server_port, self._server_task = await run_fixed_port_server(
+                self._app, self._server_address, self._listen_port
+            )
+        else:
+            self._server_port, self._server_task = await run_uvicorn(self._app, None, self._server_address)
         host = f"[{self._server_address}]" if is_valid_ipv6_address(self._server_address) else self._server_address
-        self._server_base_url = f"http://{host}:{self._server_port}"
+        self._server_base_url = (
+            self._advertised_base_url.rstrip("/")
+            if self._advertised_base_url else f"http://{host}:{self._server_port}"
+        )
+        logger.info("Gateway listening on %s:%s; advertised origin %s",
+                    self._server_address, self._server_port, self._server_base_url)
 
     async def shutdown(self) -> None:
         """Stop the FastAPI server backing this gateway actor."""

@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import shlex
+from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
@@ -37,6 +38,10 @@ async def _finish_cleanup(coro) -> None:
     task.result()
 
 
+class _TransportTimeout(RuntimeError):
+    """SDK/request timeout, distinct from exhaustion of the agent command budget."""
+
+
 @register_sandbox("e2b")
 class E2BSandbox(Sandbox):
     """Own one sandbox created from an existing KASandbox template.
@@ -49,6 +54,7 @@ class E2BSandbox(Sandbox):
         self,
         *,
         template: str = "",
+        expected_instance_id: str | None = None,
         runtime_timeout: float = 3600.0,
         api_url: str | None = None,
         domain: str | None = None,
@@ -56,6 +62,7 @@ class E2BSandbox(Sandbox):
         api_key: str | None = None,
         user: str | None = None,
         request_timeout: float = 60.0,
+        upload_timeout: float = 600.0,
         health_timeout: float = 10.0,
         cleanup_timeout: float = 30.0,
     ) -> None:
@@ -64,6 +71,7 @@ class E2BSandbox(Sandbox):
         for name, value in (
             ("runtime_timeout", runtime_timeout),
             ("request_timeout", request_timeout),
+            ("upload_timeout", upload_timeout),
             ("health_timeout", health_timeout),
             ("cleanup_timeout", cleanup_timeout),
         ):
@@ -83,9 +91,12 @@ class E2BSandbox(Sandbox):
                 parsed = urlsplit(value)
                 if parsed.scheme not in {"http", "https"} or not parsed.hostname:
                     raise ValueError(f"{name} must be an absolute HTTP(S) URL")
+        self.expected_instance_id = expected_instance_id
+        self.command_budget_exhausted = False
         self.template = template.strip()
         self.runtime_timeout = math.ceil(runtime_timeout)
         self.request_timeout = request_timeout
+        self.upload_timeout = upload_timeout
         self.health_timeout = health_timeout
         self.cleanup_timeout = cleanup_timeout
         self.user = user
@@ -197,7 +208,7 @@ class E2BSandbox(Sandbox):
         from httpcore import TimeoutException as CoreTimeoutException
         from httpx import TimeoutException as HTTPTimeoutException
 
-        return super()._is_timeout_error(exc) or isinstance(
+        return isinstance(exc, _TransportTimeout) or super()._is_timeout_error(exc) or isinstance(
             exc, TimeoutException | CoreTimeoutException | HTTPTimeoutException
         )
 
@@ -219,7 +230,7 @@ class E2BSandbox(Sandbox):
         sandbox = self._require_sandbox()
         handle = None
 
-        async def run() -> ExecResult:
+        async def run_command() -> ExecResult:
             nonlocal handle
             handle = await asyncio.wait_for(
                 sandbox.commands.run(
@@ -239,6 +250,15 @@ class E2BSandbox(Sandbox):
                 result = exc
             return ExecResult(exit_code=result.exit_code, stdout=result.stdout, stderr=result.stderr)
 
+        async def run() -> ExecResult:
+            try:
+                return await run_command()
+            except Exception as exc:
+                if self._is_timeout_error(exc):
+                    raise _TransportTimeout("E2B command transport timed out") from exc
+                raise
+
+        self.command_budget_exhausted = False
         try:
             # timeout=None explicitly has no command deadline, including no SDK
             # default 60-second connection limit. Lifetime still bounds the VM.
@@ -252,6 +272,7 @@ class E2BSandbox(Sandbox):
         except Exception as exc:
             if not self._is_timeout_error(exc):
                 raise
+            self.command_budget_exhausted = isinstance(exc, asyncio.TimeoutError)
             try:
                 await _finish_cleanup(self._abort_command(sandbox))
             except Exception as cleanup_error:
@@ -282,3 +303,12 @@ class E2BSandbox(Sandbox):
             return await super().write_file(path, content)
         data = content.encode("utf-8") if isinstance(content, str) else content
         await self._require_sandbox().files.write(path, data, user=self.user, request_timeout=self.request_timeout)
+
+    async def upload_file(self, local_file: Path | str, remote_file: str) -> None:
+        """Upload binary files through the SDK with a separate transfer timeout."""
+        if not remote_file.startswith("/"):
+            return await super().upload_file(local_file, remote_file)
+        with Path(local_file).open("rb") as stream:
+            await self._require_sandbox().files.write(
+                remote_file, stream, user=self.user, request_timeout=self.upload_timeout
+            )

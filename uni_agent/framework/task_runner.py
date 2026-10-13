@@ -134,6 +134,7 @@ async def run_task(
             "model_name": model_name,
         },
     )
+    print("####", session.base_url, api_key)
 
     # openyuanrong reverse tunnel: the sandbox config pins the in-sandbox tunnel
     # port (sandbox_kwargs.proxy_port); only the gateway upstream + the agent's

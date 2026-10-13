@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "instances": {
+    "django__django-11848": {
+      "template": "enikxjwh740pvkr9p2n9",
+      "template_name": "django_1776_django-11848",
+      "split": "train"
+    },
+    "django__django-11951": {
+      "template": "ovi25tencxvw8obiaa13",
+      "template_name": "django_1776_django-11951",
+      "split": "train"
+    },
+    "django__django-11964": {
+      "template": "bji4epb8cv9iumno3yr4",
+      "template_name": "django_1776_django-11964",
+      "split": "train"
+    },
+    "django__django-11999": {
+      "template": "8xcwuvp2tltxut5vfvvb",
+      "template_name": "django_1776_django-11999",
+      "split": "train"
+    },
+    "django__django-12039": {
+      "template": "q40enpcwz1tu0zk0ngkj",
+      "template_name": "django_1776_django-12039",
+      "split": "train"
+    },
+    "django__django-12050": {
+      "template": "odt0yivm9qtpf9n8z0aj",
+      "template_name": "django_1776_django-12050",
+      "split": "train"
+    },
+    "django__django-12125": {
+      "template": "35s6j2vlexee9pr16jeb",
+      "template_name": "django_1776_django-12125",
+      "split": "train"
+    },
+    "django__django-12143": {
+      "template": "8803knt2c9op6f4yg2nl",
+      "template_name": "django_1776_django-12143",
+      "split": "train"
+    },
+    "django__django-12155": {
+      "template": "qoo0vshuat0gkrdgni9q",
+      "template_name": "django_1776_django-12155",
+      "split": "train"
+    },
+    "django__django-12193": {
+      "template": "jjunotahpakr97mjhdkk",
+      "template_name": "django_1776_django-12193",
+      "split": "train"
+    },
+    "django__django-12209": {
+      "template": "lsu9wr7s6jck61sqdtmr",
+      "template_name": "django_1776_django-12209",
+      "split": "train"
+    },
+    "django__django-12262": {
+      "template": "fs28nxyk257avrccoeut",
+      "template_name": "django_1776_django-12262",
+      "split": "train"
+    },
+    "django__django-12273": {
+      "template": "njqa40xq3t2nvoc31tcv",
+      "template_name": "django_1776_django-12273",
+      "split": "train"
+    },
+    "django__django-12276": {
+      "template": "2i3vsz5g4wq7s2hi1fzu",
+      "template_name": "django_1776_django-12276",
+      "split": "train"
+    },
+    "django__django-12304": {
+      "template": "kmd02xu9eqvwy4j228s1",
+      "template_name": "django_1776_django-12304",
+      "split": "train"
+    },
+    "django__django-12308": {
+      "template": "cvqlso9xxh5vbi19wybg",
+      "template_name": "django_1776_django-12308",
+      "split": "train"
+    },
+    "django__django-12325": {
+      "template": "ibmd2gahtp035st2emgc",
+      "template_name": "django_1776_django-12325",
+      "split": "train"
+    },
+    "django__django-12406": {
+      "template": "817iyrut0fzwneisy27s",
+      "template_name": "django_1776_django-12406",
+      "split": "train"
+    },
+    "django__django-12419": {
+      "template": "r105vfb9qyptb3ygqg9h",
+      "template_name": "django_1776_django-12419",
+      "split": "train"
+    },
+    "django__django-12663": {
+      "template": "dg4k3vrfxishwnaw758q",
+      "template_name": "django_1776_django-12663",
+      "split": "train"
+    },
+    "django__django-12708": {
+      "template": "nwby3tnu7hawpusapiwj",
+      "template_name": "django_1776_django-12708",
+      "split": "train"
+    },
+    "django__django-12713": {
+      "template": "uotves4k8s5dgzpxbkhj",
+      "template_name": "django_1776_django-12713",
+      "split": "train"
+    },
+    "django__django-12741": {
+      "template": "l1042aeah9dotlocw6ao",
+      "template_name": "django_1776_django-12741",
+      "split": "train"
+    },
+    "django__django-12774": {
+      "template": "f8e0j5sphw5cbnn7v8x0",
+      "template_name": "django_1776_django-12774",
+      "split": "train"
+    },
+    "django__django-12858": {
+      "template": "ap5k0wgk8yadwmlzrsbp",
+      "template_name": "django_1776_django-12858",
+      "split": "train"
+    },
+    "django__django-14855": {
+      "template": "9a693w4fzg7e8hpyw8hw",
+      "template_name": "django_1776_django-14855",
+      "split": "train"
+    },
+    "django__django-14915": {
+      "template": "e6jv24cia1prm6e3rmst",
+      "template_name": "django_1776_django-14915",
+      "split": "train"
+    },
+    "django__django-14999": {
+      "template": "o8hd9h2ldds7muxse53d",
+      "template_name": "django_1776_django-14999",
+      "split": "train"
+    },
+    "django__django-15098": {
+      "template": "yjj0omocawkrjk4wzpfn",
+      "template_name": "django_1776_django-15098",
+      "split": "train"
+    },
+    "django__django-15103": {
+      "template": "9m4oxafnupnhf6jc8der",
+      "template_name": "django_1776_django-15103",
+      "split": "train"
+    },
+    "django__django-9296": {
+      "template": "653z7lm3qqngmtaflocs",
+      "template_name": "django_1776_django-9296",
+      "split": "train"
+    },
+    "astropy__astropy-12907": {
+      "template": "5l1ubr8zkb94nm1zde3u",
+      "template_name": "sweb_astropy_12907",
+      "split": "train"
+    },
+    "django__django-15037": {
+      "template": "udg7buyi2kq54kq2zxm8",
+      "template_name": "swebench-django-15037",
+      "split": "train"
+    }
+  }
+}

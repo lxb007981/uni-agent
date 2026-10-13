@@ -34,12 +34,17 @@ class GatewayManager:
         if gateway_actor_config is None:
             raise ValueError("gateway_actor_config is required when gateway_count > 0")
 
+        if gateway_actor_config.advertised_base_url and gateway_count != 1:
+            raise ValueError("A shared advertised gateway URL requires gateway_count=1")
+
         from uni_agent.gateway.gateway import GatewayActor
 
         # Round-robin across alive CPU nodes so gateway actors do not all pack onto
         # the driver node under Ray's default PACK scheduling. Mirrors
         # AgentLoopWorker placement (verl/experimental/agent_loop/agent_loop.py).
         node_ids = [node["NodeID"] for node in ray.nodes() if node["Alive"] and node["Resources"].get("CPU", 0) > 0]
+        if gateway_actor_config.advertised_base_url and len(node_ids) != 1:
+            raise ValueError("The advertised gateway route currently requires a single Ray CPU node")
         if not node_ids:
             raise RuntimeError("No alive CPU nodes available for GatewayActor placement")
 

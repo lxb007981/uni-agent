@@ -1,0 +1,20 @@
+- name: swe_bench
+  sandbox:
+    provider: e2b
+    runtime_timeout: 3600
+    sandbox_kwargs:
+      request_timeout: 60
+      cleanup_timeout: 30
+  agent:
+    name: claude_code
+    max_turns: 200
+    run_timeout: 4800
+  eval_timeout: 1200
+  score_agent_timeout: true
+  prompt_template:
+    - role: user
+      content: |-
+        Resolve the following issue in the current repository:
+        {problem_statement}
+
+        Make the minimal correct changes and verify them. Do not modify tests or commit.

@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,8 @@ class GatewayActorConfig:
 
     Attributes:
         tokenizer: Tokenizer used by the message codec.
+        listen_port: HTTP bind port; zero keeps automatic allocation.
+        advertised_base_url: External HTTP origin; session paths are appended at runtime.
         processor: Optional multimodal processor used for vision requests.
         tool_parser_name: Optional tool parser name for decoding tool calls.
         rollout_backend: Inference backend name used to select the matching
@@ -61,8 +64,19 @@ class GatewayActorConfig:
     response_length: int | None = None
     enable_last_assistant_rollback: bool = True
     coalesce_reserved_exact_requests: bool = True
+    listen_port: int = 0
+    advertised_base_url: str | None = None
 
     def __post_init__(self) -> None:
+        if type(self.listen_port) is not int or not 0 <= self.listen_port <= 65535:
+            raise ValueError("listen_port must be an integer between 0 and 65535")
+        if self.advertised_base_url is not None:
+            url = urlsplit(self.advertised_base_url)
+            if (url.scheme not in {"http", "https"} or not url.hostname
+                    or url.username or url.password or url.query or url.fragment
+                    or url.path not in {"", "/"}):
+                raise ValueError("advertised_base_url must be an HTTP(S) origin without a path or credentials")
+            _ = url.port  # Validate port syntax and range.
         if type(self.enable_tool_parser_cache) is not bool:
             raise ValueError(
                 f"enable_tool_parser_cache must be a bool, got {type(self.enable_tool_parser_cache).__name__}"
